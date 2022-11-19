@@ -4,7 +4,7 @@
 
 It's really difficult to install cuda-8 and tf-0.12 in modern linux versions. So, try using the following docker image if available.
 
-1. Clone my fork: `git clone https://github.com/liuyuemaicha/Adversarial-Learning-for-Neural-Dialogue-Generation-in-Tensorflow.git ALDGen`
+1. Clone my fork: `git clone https://github.com/bsantraigi/2022-R3-Baseline-ALDGen.git`
 2. Launch a docker container and enter a bash shell. From there run the python scripts.
 ```
 docker run --rm -it --entrypoint bash -v ${PWD}:/notebooks/ALDGen tensorflow/tensorflow:0.12.0-gpu
