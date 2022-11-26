@@ -1,3 +1,11 @@
+# Python
+**.pyc
+**ipynb_checkpoints**
+
+# Pytorch
+**/checkpoints/
+**/tensorboard/
+
 # Windows image file caches
 Thumbs.db
 ehthumbs.db
