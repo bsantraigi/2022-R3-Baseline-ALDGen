@@ -11,6 +11,13 @@ docker run --rm --gpus all -it --entrypoint bash -v ${PWD}:/notebooks/ALDGen ten
 python al_neural_dialogue_train.py
 ```
 
+## Steps to run code:
+
+1. Run `get_data.sh`.
+2. Run `create_data_py3.ipynb`
+3. 
+
+
 
 # Adversarial-Learning-for-Neural-Dialogue-Generation-in-Tensorflow
 

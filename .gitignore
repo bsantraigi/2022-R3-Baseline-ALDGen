@@ -1,3 +1,10 @@
+# data
+raw_data/
+dd/
+dd_cc/
+dstc7/
+
+
 # Python
 **.pyc
 **ipynb_checkpoints**
