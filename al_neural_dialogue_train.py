@@ -7,13 +7,35 @@ import time
 import gen.generator as gens
 import disc.hier_disc as h_disc
 import random
-import utils.conf as conf
+
 import utils.data_utils as data_utils
 
-gen_config = conf.gen_config
-disc_config = conf.disc_config
-evl_config = conf.disc_config
+import argparse
 
+parser = argparse.ArgumentParser(description="Training Args")
+parser.add_argument('-d', '--dataset', type=str, required=True, choices=["dd", "dd_cc", "dstc7"])
+args = parser.parse_args()
+
+if args.dataset == "dd_cc":
+    import utils.conf_dd_cc as conf
+    
+    gen_config = conf.gen_config
+    disc_config = conf.disc_config
+    evl_config = conf.disc_config
+elif args.dataset == "dd":
+    import utils.conf_dd as conf
+    
+    gen_config = conf.gen_config
+    disc_config = conf.disc_config
+    evl_config = conf.disc_config
+elif args.dataset == "dstc7":
+    import utils.conf_dstc7 as conf
+    
+    gen_config = conf.gen_config
+    disc_config = conf.disc_config
+    evl_config = conf.disc_config
+
+print(conf)
 
 # pre train discriminator
 def disc_pre_train():
@@ -274,13 +296,13 @@ def main(_):
     gen_pre_train()
 
     # model test
-    # gen_test()
+#     gen_test()
 
     # step_2 gen training data for disc
-    # gen_disc()
+#     gen_disc()
 
     # step_3 training disc model
-    # disc_pre_train()
+#     disc_pre_train()
 
     # step_4 training al model
     # al_train()

@@ -102,15 +102,19 @@ def train(gen_config):
         train_total_size = float(sum(train_bucket_sizes))
         train_buckets_scale = [sum(train_bucket_sizes[:i + 1]) / train_total_size
                                for i in xrange(len(train_bucket_sizes))]
+        print("Train bucket sizes: ", train_bucket_sizes)
+        print("Train total size: ", train_total_size)
 
         # This is the training loop.
         step_time, loss = 0.0, 0.0
         current_step = 0
-        #previous_losses = []
+        previous_losses = []
 
         gen_loss_summary = tf.Summary()
         gen_writer = tf.summary.FileWriter(gen_config.tensorboard_dir, sess.graph)
-
+        
+        epoch_progress_equivalent = 0.0
+        
         while True:
             # Choose a bucket according to disc_data distribution. We pick a random number
             # in [0, 1] and use the corresponding interval in train_buckets_scale.
@@ -123,6 +127,9 @@ def train(gen_config):
                 train_set, bucket_id, gen_config.batch_size)
 
             _, step_loss, _ = model.step(sess, encoder_inputs, decoder_inputs, target_weights, bucket_id, forward_only=False)
+            
+            # Count progress in terms of epoch
+            epoch_progress_equivalent += gen_config.batch_size/train_total_size
 
             step_time += (time.time() - start_time) / gen_config.steps_per_checkpoint
             loss += step_loss / gen_config.steps_per_checkpoint
@@ -138,13 +145,13 @@ def train(gen_config):
 
                 # Print statistics for the previous epoch.
                 perplexity = math.exp(loss) if loss < 300 else float('inf')
-                print ("global step %d learning rate %.4f step-time %.2f perplexity "
-                       "%.2f" % (model.global_step.eval(), model.learning_rate.eval(),
+                print ("[E: %.2f] global step %d learning rate %.4f step-time %.2f perplexity "
+                       "%.2f" % (epoch_progress_equivalent, model.global_step.eval(), model.learning_rate.eval(),
                                  step_time, perplexity))
                 # Decrease learning rate if no improvement was seen over last 3 times.
                 # if len(previous_losses) > 2 and loss > max(previous_losses[-3:]):
                 #     sess.run(model.learning_rate_decay_op)
-                # previous_losses.append(loss)
+                
                 # Save checkpoint and zero timer and loss.
 
                 if current_step % (gen_config.steps_per_checkpoint * 3) == 0:
@@ -154,6 +161,20 @@ def train(gen_config):
                         os.makedirs(gen_ckpt_dir)
                     checkpoint_path = os.path.join(gen_ckpt_dir, "chitchat.model")
                     model.saver.save(sess, checkpoint_path, global_step=model.global_step)
+                    
+                    if len(previous_losses) > 2:
+                        # update best model
+                        if loss < min(previous_losses):
+                            print("Updating best model for loss = %f" % (loss))
+                            model.saver.save(sess, checkpoint_path+"_best", global_step=0)
+
+                    PATIENCE=15
+                    if len(previous_losses) > PATIENCE:
+                        # Early stop - if min loss has not changed in last 15 checks                        
+                        if min(previous_losses[-PATIENCE:]) > min(previous_losses):
+                            break
+                
+                    previous_losses.append(loss)
 
 
                 step_time, loss = 0.0, 0.0
