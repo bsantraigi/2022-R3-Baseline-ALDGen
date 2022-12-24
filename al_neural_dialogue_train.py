@@ -165,6 +165,9 @@ def al_train():
         train_total_size = float(sum(train_bucket_sizes))
         train_buckets_scale = [sum(train_bucket_sizes[:i + 1]) / train_total_size
                                for i in xrange(len(train_bucket_sizes))]
+        
+        print("Train bucket sizes: ", train_bucket_sizes)
+        print("Train total size: ", train_total_size)
 
         disc_model = h_disc.create_model(sess, disc_config, disc_config.name_model)
         gen_model = gens.create_model(sess, gen_config, forward_only=False, name_scope=gen_config.name_model)
@@ -177,6 +180,8 @@ def al_train():
         gen_writer = tf.summary.FileWriter(gen_config.tensorboard_dir, sess.graph)
         disc_writer = tf.summary.FileWriter(disc_config.tensorboard_dir, sess.graph)
 
+        epoch_progress_equivalent = 0.0
+        
         while True:
             current_step += 1
             start_time = time.time()
@@ -189,6 +194,9 @@ def al_train():
             # 1.Sample (X,Y) from real disc_data
             # print("bucket_id: %d" %bucket_id)
             encoder_inputs, decoder_inputs, target_weights, source_inputs, source_outputs = gen_model.get_batch(train_set, bucket_id, gen_config.batch_size)
+            
+            # Count progress in terms of epoch
+            epoch_progress_equivalent += gen_config.batch_size/train_total_size
 
             # 2.Sample (X,Y) and (X, ^Y) through ^Y ~ G(*|X)
             train_query, train_answer, train_labels = disc_train_data(sess, gen_model, vocab, source_inputs, source_outputs,
@@ -252,8 +260,8 @@ def al_train():
 
                 step_time += (time.time() - start_time) / gen_config.steps_per_checkpoint
 
-                print("current_steps: %d, step time: %.4f, disc_loss: %.3f, gen_loss: %.3f, t_loss: %.3f, reward: %.3f"
-                      %(current_step, step_time, disc_loss, gen_loss, t_loss, batch_reward))
+                print("[E: %.2f] current_steps: %d, step time: %.4f, disc_loss: %.3f, gen_loss: %.3f, t_loss: %.3f, reward: %.3f"
+                      %(epoch_progress_equivalent, current_step, step_time, disc_loss, gen_loss, t_loss, batch_reward))
 
                 disc_loss_value = disc_loss_summary.value.add()
                 disc_loss_value.tag = disc_config.name_loss
@@ -286,6 +294,21 @@ def al_train():
                         os.makedirs(gen_ckpt_dir)
                     gen_model_path = os.path.join(gen_ckpt_dir, "gen.model")
                     gen_model.saver.save(sess, gen_model_path, global_step=gen_model.global_step)
+                    
+                    if len(previous_rewards) > 2:
+                        # update best model
+                        if batch_reward > max(previous_rewards):
+                            print("Updating best model for reward = %f" % (batch_reward))
+                            disc_model.saver.save(sess, disc_model_path+"_best", global_step=0)
+                            gen_model.saver.save(sess, gen_model_path+"_best", global_step=0)
+
+                    PATIENCE=15
+                    if len(previous_rewards) > PATIENCE:
+                        # Early stop - if min loss has not changed in last 15 checks                        
+                        if max(previous_rewards[-PATIENCE:]) < max(previous_rewards):
+                            break
+                
+                    previous_rewards.append(batch_reward)
 
                 step_time, disc_loss, gen_loss, t_loss, batch_reward = 0.0, 0.0, 0.0, 0.0, 0.0
                 sys.stdout.flush()
@@ -293,16 +316,16 @@ def al_train():
 
 def main(_):
     # step_1 training gen model
-    gen_pre_train()
+#     gen_pre_train()
 
     # model test
-#     gen_test()
+    gen_test()
 
     # step_2 gen training data for disc
-#     gen_disc()
+    # gen_disc()
 
     # step_3 training disc model
-#     disc_pre_train()
+    # disc_pre_train()
 
     # step_4 training al model
     # al_train()

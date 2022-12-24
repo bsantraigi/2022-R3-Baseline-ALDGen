@@ -193,49 +193,59 @@ def test_decoder(gen_config):
     with tf.Session() as sess:
         model = create_model(sess, gen_config, forward_only=True, name_scope=gen_config.name_model)
         model.batch_size = 1
+	
+        for split in ['dev', 'test', 'train']:
+            train_path = os.path.join(gen_config.train_dir, "chitchat.%s" % split)
+            voc_file_path = [train_path + ".answer", train_path + ".query"]
+            vocab_path = os.path.join(gen_config.train_dir, "vocab%d.all" % gen_config.vocab_size)
+            data_utils.create_vocabulary(vocab_path, voc_file_path, gen_config.vocab_size)
+            vocab, rev_vocab = data_utils.initialize_vocabulary(vocab_path)
+            
+            # Initialize the array to store the generated outputs
+            outputs_list = []
+            
+            # Iterate through the sentences in the train_path file
+            with open(train_path + ".query", 'r') as f:
+                for xi, sentence in enumerate(f):
+                    print("Progress %d"% xi)
+                    token_ids = data_utils.sentence_to_token_ids(tf.compat.as_bytes(sentence), vocab)
+                    # print("token_id: ", token_ids)
+                    bucket_id = len(gen_config.buckets) - 1
+                    for i, bucket in enumerate(gen_config.buckets):
+                        if bucket[0] >= len(token_ids):
+                            bucket_id = i
+                            break
+                    else:
+                        print("Sentence truncated: %s"% sentence)
 
-        train_path = os.path.join(gen_config.train_dir, "chitchat.train")
-        voc_file_path = [train_path + ".answer", train_path + ".query"]
-        vocab_path = os.path.join(gen_config.train_dir, "vocab%d.all" % gen_config.vocab_size)
-        data_utils.create_vocabulary(vocab_path, voc_file_path, gen_config.vocab_size)
-        vocab, rev_vocab = data_utils.initialize_vocabulary(vocab_path)
+                    encoder_inputs, decoder_inputs, target_weights, _, _ = model.get_batch({bucket_id: [(token_ids, [1])]},
+                                                                 bucket_id, model.batch_size, type=0)
 
-        sys.stdout.write("> ")
-        sys.stdout.flush()
-        sentence = sys.stdin.readline()
-        while sentence:
-            token_ids = data_utils.sentence_to_token_ids(tf.compat.as_bytes(sentence), vocab)
-            print("token_id: ", token_ids)
-            bucket_id = len(gen_config.buckets) - 1
-            for i, bucket in enumerate(gen_config.buckets):
-                if bucket[0] >= len(token_ids):
-                    bucket_id = i
-                    break
-            else:
-                print("Sentence truncated: %s", sentence)
+                    # print("bucket_id: ", bucket_id)
+                    # print("encoder_inputs:", encoder_inputs)
+                    # print("decoder_inputs:", decoder_inputs)
+                    # print("target_weights:", target_weights)
 
-            encoder_inputs, decoder_inputs, target_weights, _, _ = model.get_batch({bucket_id: [(token_ids, [1])]},
-                                                         bucket_id, model.batch_size, type=0)
+                    _, _, output_logits = model.step(sess, encoder_inputs, decoder_inputs, target_weights, bucket_id, True)
 
-            print("bucket_id: ", bucket_id)
-            print("encoder_inputs:", encoder_inputs)
-            print("decoder_inputs:", decoder_inputs)
-            print("target_weights:", target_weights)
+                    # print("output_logits", np.shape(output_logits))
 
-            _, _, output_logits = model.step(sess, encoder_inputs, decoder_inputs, target_weights, bucket_id, True)
+                    outputs = [int(np.argmax(logit, axis=1)) for logit in output_logits]
 
-            print("output_logits", np.shape(output_logits))
+                    if data_utils.EOS_ID in outputs:
+                        outputs = outputs[:outputs.index(data_utils.EOS_ID)]
+                    # Convert the outputs to strings and store them in the outputs list
+                    outputs_list.append(" ".join([tf.compat.as_str(rev_vocab[output]) for output in outputs]))
 
-            outputs = [int(np.argmax(logit, axis=1)) for logit in output_logits]
+                    # print(" ".join([tf.compat.as_str(rev_vocab[output]) for output in outputs]))
+                    # print("> ", end="")
+                    # sys.stdout.flush()
+                    # sentence = sys.stdin.readline()
 
-            if data_utils.EOS_ID in outputs:
-                outputs = outputs[:outputs.index(data_utils.EOS_ID)]
-
-            print(" ".join([tf.compat.as_str(rev_vocab[output]) for output in outputs]))
-            print("> ", end="")
-            sys.stdout.flush()
-            sentence = sys.stdin.readline()
-
+                # Dump the generated outputs to the file
+                with open(train_path + '.gen', 'w') as f:
+                    for output in outputs_list:
+                        f.write(output + '\n')
 
 def decoder(gen_config):
     vocab, rev_vocab, dev_set, train_set = prepare_data(gen_config)
@@ -247,10 +257,12 @@ def decoder(gen_config):
 
     with tf.Session() as sess:
         model = create_model(sess, gen_config, forward_only=True, name_scope=gen_config.name_model)
-
-        disc_train_query = open("train.query", "w")
-        disc_train_answer = open("train.answer", "w")
-        disc_train_gen = open("train.gen", "w")
+        
+        disc_data_path = gen_config.train_dir.replace("gen_data", "disc_data")
+        print("Writing disc training files to %s" % (disc_data_path,))
+        disc_train_query = open(os.path.join(disc_data_path, "train.query"), "w")
+        disc_train_answer = open(os.path.join(disc_data_path, "train.answer"), "w")
+        disc_train_gen = open(os.path.join(disc_data_path, "train.gen"), "w")
 
         num_step = 0
         while num_step < 10000:

@@ -128,6 +128,10 @@ def hier_train(config_disc, config_evl):
         train_total_size = float(sum(train_bucket_sizes))
         train_buckets_scale = [sum(train_bucket_sizes[:i + 1]) / train_total_size
                                for i in xrange(len(train_bucket_sizes))]
+        
+        print("Train bucket sizes: ", train_bucket_sizes)
+        print("Train total size: ", train_total_size)
+        
         #dev_query_set, dev_answer_set, dev_gen_set = hier_read_data(dev_query_path, dev_answer_path, dev_gen_path)
         for set in query_set:
             print("set length: ", len(set))
@@ -136,9 +140,11 @@ def hier_train(config_disc, config_evl):
 
         step_time, loss = 0.0, 0.0
         current_step = 0
-        #previous_losses = []
+        previous_losses = []
         step_loss_summary = tf.Summary()
         disc_writer = tf.summary.FileWriter(config_disc.tensorboard_dir, session.graph)
+        
+        epoch_progress_equivalent = 0.0
 
         while True:
             random_number_01 = np.random.random_sample()
@@ -163,6 +169,9 @@ def hier_train(config_disc, config_evl):
 
             fetches = [model.b_train_op[bucket_id], model.b_logits[bucket_id], model.b_loss[bucket_id], model.target]
             train_op, logits, step_loss, target = session.run(fetches, feed_dict)
+            
+            # Count progress in terms of epoch
+            epoch_progress_equivalent += config_disc.batch_size/train_total_size
 
             step_time += (time.time() - start_time) / config_disc.steps_per_checkpoint
             loss += step_loss /config_disc.steps_per_checkpoint
@@ -188,7 +197,7 @@ def hier_train(config_disc, config_evl):
                 print("reward: ", reward)
 
 
-                print("current_step: %d, step_loss: %.4f" %(current_step, step_loss))
+                print("[E: %.2f] current_step: %d, step_loss: %.4f" %(epoch_progress_equivalent, current_step, step_loss))
 
 
                 if current_step % (config_disc.steps_per_checkpoint * 3) == 0:
@@ -199,7 +208,21 @@ def hier_train(config_disc, config_evl):
                     disc_model_path = os.path.join(disc_ckpt_dir, "disc.model")
                     model.saver.save(session, disc_model_path, global_step=model.global_step)
 
+                
+                    if len(previous_losses) > 2:
+                        # update best model
+                        if loss < min(previous_losses):
+                            print("Updating best model for loss = %f" % (loss))
+                            model.saver.save(sess, disc_model_path+"_best", global_step=0)
 
+                    PATIENCE=15                
+                    if len(previous_losses) > PATIENCE:
+                        # Early stop - if min loss has not changed in last 15 checks
+                        if min(previous_losses[-PATIENCE:]) > min(previous_losses):
+                            break
+                    
+                    previous_losses.append(loss)
+                
                 step_time, loss = 0.0, 0.0
                 sys.stdout.flush()
 
