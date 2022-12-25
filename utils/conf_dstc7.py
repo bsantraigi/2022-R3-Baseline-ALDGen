@@ -53,6 +53,7 @@ class disc_config(object):
     #max_decay_epoch = 30
     max_grad_norm = 5
     buckets = [(5, 10), (10, 15), (20, 25), (40, 50)]
+    max_epochs = 10
 
 
 class gen_config(object):
@@ -71,9 +72,10 @@ class gen_config(object):
     teacher_loss = "teacher_loss"
     reward_name = "reward"
     max_train_data_size = 0
-    steps_per_checkpoint = 200
+    steps_per_checkpoint = 100
     buckets = [(5, 10), (10, 15), (20, 25), (40, 50)]
     buckets_concat = [(5, 10), (10, 15), (20, 25), (40, 50), (100, 50)]
+    max_epochs = 10
 
 
 # class gen_config(object):

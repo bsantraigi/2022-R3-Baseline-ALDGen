@@ -4,6 +4,8 @@ dd/
 dd_cc/
 dstc7/
 
+# vim
+**.swp
 
 # Python
 **.pyc
