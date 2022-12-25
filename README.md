@@ -15,7 +15,9 @@ python al_neural_dialogue_train.py
 
 1. Run `get_data.sh`.
 2. Run `create_data_py3.ipynb`
-3. 
+3. Run `python al_neural_dialogue_train.py -d dd_cc/dd/dstc7`.
+    1. It will run all the steps involved in training the model.
+    2. pretraining --> generate disc_training data --> disc_train --> adversarial training
 
 
 

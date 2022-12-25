@@ -201,19 +201,17 @@ def hier_train(config_disc, config_evl):
 
 
                 if current_step % (config_disc.steps_per_checkpoint * 3) == 0:
-                    print("current_step: %d, save_model" % (current_step))
-                    disc_ckpt_dir = os.path.abspath(os.path.join(config_disc.train_dir, "checkpoints"))
-                    if not os.path.exists(disc_ckpt_dir):
-                        os.makedirs(disc_ckpt_dir)
-                    disc_model_path = os.path.join(disc_ckpt_dir, "disc.model")
-                    model.saver.save(session, disc_model_path, global_step=model.global_step)
-
-                
                     if len(previous_losses) > 2:
                         # update best model
                         if loss < min(previous_losses):
-                            print("Updating best model for loss = %f" % (loss))
-                            model.saver.save(sess, disc_model_path+"_best", global_step=0)
+                            print("current_step: %d, save_model" % (current_step))
+                            disc_ckpt_dir = os.path.abspath(os.path.join(config_disc.train_dir, "checkpoints"))
+                            if not os.path.exists(disc_ckpt_dir):
+                                os.makedirs(disc_ckpt_dir)
+                            disc_model_path = os.path.join(disc_ckpt_dir, "disc.model")
+                            model.saver.save(session, disc_model_path, global_step=model.global_step)
+                        else:
+                            print "Not saving model. Loss hasn't improved."
 
                     PATIENCE=15                
                     if len(previous_losses) > PATIENCE:

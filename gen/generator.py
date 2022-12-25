@@ -189,7 +189,7 @@ def train(gen_config):
                 sys.stdout.flush()
 
 
-def test_decoder(gen_config):
+def test_decoder(gen_config, disc_config):
     with tf.Session() as sess:
         model = create_model(sess, gen_config, forward_only=True, name_scope=gen_config.name_model)
         model.batch_size = 1
@@ -242,8 +242,9 @@ def test_decoder(gen_config):
                     # sys.stdout.flush()
                     # sentence = sys.stdin.readline()
 
-                # Dump the generated outputs to the file
-                with open(train_path + '.gen', 'w') as f:
+                # Dump the generated outputs to the file ({split}.gen)
+                out_path = os.path.join(disc_config.train_dir, split)
+                with open(out_path + '.gen', 'w') as f:
                     for output in outputs_list:
                         f.write(output + '\n')
 

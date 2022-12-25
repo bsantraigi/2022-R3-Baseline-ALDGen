@@ -55,7 +55,7 @@ def gen_disc():
 
 # test gen model
 def gen_test():
-    gens.test_decoder(gen_config)
+    gens.test_decoder(gen_config, disc_config)
 
 
 # prepare disc_data for discriminator and generator
@@ -174,6 +174,7 @@ def al_train():
 
         current_step = 0
         step_time, disc_loss, gen_loss, t_loss, batch_reward = 0.0, 0.0, 0.0, 0.0, 0.0
+        previous_losses = []
         gen_loss_summary = tf.Summary()
         disc_loss_summary = tf.Summary()
 
@@ -207,9 +208,10 @@ def al_train():
                 print("train_answer: ", len(train_answer))
                 print("train_labels: ", len(train_labels))
                 for i in xrange(len(train_query)):
-                    print("lable: ", train_labels[i])
+                    print("label: ", train_labels[i])
                     print("train_answer_sentence: ", train_answer[i])
                     print(" ".join([tf.compat.as_str(rev_vocab[output]) for output in train_answer[i]]))
+                    break
 
             train_query = np.transpose(train_query)
             train_answer = np.transpose(train_answer)
@@ -230,8 +232,9 @@ def al_train():
             print("=============================mc_search: True====================================")
             if current_step % 200 == 0:
                 for i in xrange(len(train_query)):
-                    print("lable: ", train_labels[i])
+                    print("label: ", train_labels[i])
                     print(" ".join([tf.compat.as_str(rev_vocab[output]) for output in train_answer[i]]))
+                    break
 
             train_query = np.transpose(train_query)
             train_answer = np.transpose(train_answer)
@@ -281,27 +284,26 @@ def al_train():
                 gen_writer.add_summary(gen_loss_summary, int(gen_global_steps))
 
                 if current_step % (gen_config.steps_per_checkpoint * 2) == 0:
-                    print("current_steps: %d, save disc model" % current_step)
-                    disc_ckpt_dir = os.path.abspath(os.path.join(disc_config.train_dir, "checkpoints"))
-                    if not os.path.exists(disc_ckpt_dir):
-                        os.makedirs(disc_ckpt_dir)
-                    disc_model_path = os.path.join(disc_ckpt_dir, "disc.model")
-                    disc_model.saver.save(sess, disc_model_path, global_step=disc_model.global_step)
-
-                    print("current_steps: %d, save gen model" % current_step)
-                    gen_ckpt_dir = os.path.abspath(os.path.join(gen_config.train_dir, "checkpoints"))
-                    if not os.path.exists(gen_ckpt_dir):
-                        os.makedirs(gen_ckpt_dir)
-                    gen_model_path = os.path.join(gen_ckpt_dir, "gen.model")
-                    gen_model.saver.save(sess, gen_model_path, global_step=gen_model.global_step)
-                    
                     if len(previous_rewards) > 2:
                         # update best model
                         if batch_reward > max(previous_rewards):
-                            print("Updating best model for reward = %f" % (batch_reward))
-                            disc_model.saver.save(sess, disc_model_path+"_best", global_step=0)
-                            gen_model.saver.save(sess, gen_model_path+"_best", global_step=0)
+                            print("current_steps: %d, save disc model" % current_step)
+                            disc_ckpt_dir = os.path.abspath(os.path.join(disc_config.train_dir, "checkpoints"))
+                            if not os.path.exists(disc_ckpt_dir):
+                                os.makedirs(disc_ckpt_dir)
+                            disc_model_path = os.path.join(disc_ckpt_dir, "disc.model")
+                            disc_model.saver.save(sess, disc_model_path, global_step=disc_model.global_step)
 
+                            print("current_steps: %d, save gen model" % current_step)
+                            gen_ckpt_dir = os.path.abspath(os.path.join(gen_config.train_dir, "checkpoints"))
+                            if not os.path.exists(gen_ckpt_dir):
+                                os.makedirs(gen_ckpt_dir)
+                            gen_model_path = os.path.join(gen_ckpt_dir, "gen.model")
+                            gen_model.saver.save(sess, gen_model_path, global_step=gen_model.global_step)
+                        else:
+                            print "Not saving model. Reward hasn't improved."
+                        
+                    
                     PATIENCE=15
                     if len(previous_rewards) > PATIENCE:
                         # Early stop - if min loss has not changed in last 15 checks                        
@@ -319,7 +321,7 @@ def main(_):
 #     gen_pre_train()
 
     # model test
-    gen_test()
+    # gen_test()
 
     # step_2 gen training data for disc
     # gen_disc()
@@ -328,7 +330,7 @@ def main(_):
     # disc_pre_train()
 
     # step_4 training al model
-    # al_train()
+    al_train()
 
     # model test
     # gen_test()
