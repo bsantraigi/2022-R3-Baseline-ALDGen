@@ -218,7 +218,9 @@ def hier_train(config_disc, config_evl):
                         # Early stop - if min loss has not changed in last 15 checks
                         if min(previous_losses[-PATIENCE:]) > min(previous_losses):
                             break
-                    
+                    if epoch_progress_equivalent > config_disc.max_epochs:
+                        print("Stopping disc training due to max_epochs setting. E=%d" % epoch_progress_equivalent)
+                        break 
                     previous_losses.append(loss)
                 
                 step_time, loss = 0.0, 0.0

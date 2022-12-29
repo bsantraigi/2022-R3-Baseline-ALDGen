@@ -50,15 +50,23 @@ def create_model(session, gen_config, forward_only, name_scope, initializer=None
     """Create translation model and initialize or load parameters in session."""
     with tf.variable_scope(name_or_scope=name_scope, initializer=initializer):
         model = seq2seq_model.Seq2SeqModel(gen_config,  name_scope=name_scope, forward_only=forward_only)
-        gen_ckpt_dir = os.path.abspath(os.path.join(gen_config.train_dir, "checkpoints"))
+        # Try adv-learned gen model 
+        gen_ckpt_dir = os.path.abspath(os.path.join(gen_config.train_dir, "al_checkpoints"))
         ckpt = tf.train.get_checkpoint_state(gen_ckpt_dir)
         if ckpt and tf.train.checkpoint_exists(ckpt.model_checkpoint_path):
-            print("Reading Gen model parameters from %s" % ckpt.model_checkpoint_path)
+            print("Reading AL-Gen model parameters from %s" % ckpt.model_checkpoint_path)
             model.saver.restore(session, ckpt.model_checkpoint_path)
         else:
-            print("Created Gen model with fresh parameters.")
-            gen_global_variables = [gv for gv in tf.global_variables() if name_scope in gv.name]
-            session.run(tf.variables_initializer(gen_global_variables))
+            # Try the pretrained gen model (i.e. without adv-training)
+            gen_ckpt_dir = os.path.abspath(os.path.join(gen_config.train_dir, "checkpoints"))
+            ckpt = tf.train.get_checkpoint_state(gen_ckpt_dir)
+            if ckpt and tf.train.checkpoint_exists(ckpt.model_checkpoint_path):
+                print("Reading Gen model parameters from %s" % ckpt.model_checkpoint_path)
+                model.saver.restore(session, ckpt.model_checkpoint_path)
+            else:
+                print("Created Gen model with fresh parameters.")
+                gen_global_variables = [gv for gv in tf.global_variables() if name_scope in gv.name]
+                session.run(tf.variables_initializer(gen_global_variables))
         return model
 
 
@@ -154,26 +162,28 @@ def train(gen_config):
                 
                 # Save checkpoint and zero timer and loss.
 
-                if current_step % (gen_config.steps_per_checkpoint * 3) == 0:
-                    print("current_step: %d, save model" %(current_step))
-                    gen_ckpt_dir = os.path.abspath(os.path.join(gen_config.train_dir, "checkpoints"))
-                    if not os.path.exists(gen_ckpt_dir):
-                        os.makedirs(gen_ckpt_dir)
-                    checkpoint_path = os.path.join(gen_ckpt_dir, "chitchat.model")
-                    model.saver.save(sess, checkpoint_path, global_step=model.global_step)
-                    
+                if current_step % (gen_config.steps_per_checkpoint * 2) == 0:
                     if len(previous_losses) > 2:
                         # update best model
                         if loss < min(previous_losses):
-                            print("Updating best model for loss = %f" % (loss))
-                            model.saver.save(sess, checkpoint_path+"_best", global_step=0)
-
+                            print("current_step: %d, save model" %(current_step))
+                            gen_ckpt_dir = os.path.abspath(os.path.join(gen_config.train_dir, "checkpoints"))
+                            if not os.path.exists(gen_ckpt_dir):
+                                os.makedirs(gen_ckpt_dir)
+                            checkpoint_path = os.path.join(gen_ckpt_dir, "chitchat.model")
+                            model.saver.save(sess, checkpoint_path, global_step=model.global_step)
+                        else:
+                            print("Not saving model. Loss hasn't improved.")
+                    
                     PATIENCE=15
                     if len(previous_losses) > PATIENCE:
                         # Early stop - if min loss has not changed in last 15 checks                        
                         if min(previous_losses[-PATIENCE:]) > min(previous_losses):
                             break
                 
+                    if epoch_progress_equivalent > gen_config.max_epochs:
+                        print("Stopping gen training due to max_epochs setting. E=%d" % epoch_progress_equivalent)
+                        break 
                     previous_losses.append(loss)
 
 
@@ -189,12 +199,13 @@ def train(gen_config):
                 sys.stdout.flush()
 
 
-def test_decoder(gen_config, disc_config):
+def test_decoder(gen_config, disc_config, output_file_extension):
     with tf.Session() as sess:
         model = create_model(sess, gen_config, forward_only=True, name_scope=gen_config.name_model)
         model.batch_size = 1
 	
-        for split in ['dev', 'test', 'train']:
+        # for split in ['dev', 'test', 'train']:
+        for split in ['test', 'dev']:
             train_path = os.path.join(gen_config.train_dir, "chitchat.%s" % split)
             voc_file_path = [train_path + ".answer", train_path + ".query"]
             vocab_path = os.path.join(gen_config.train_dir, "vocab%d.all" % gen_config.vocab_size)
@@ -207,7 +218,8 @@ def test_decoder(gen_config, disc_config):
             # Iterate through the sentences in the train_path file
             with open(train_path + ".query", 'r') as f:
                 for xi, sentence in enumerate(f):
-                    print("Progress %d"% xi)
+                    if xi % 100 == 0:
+                        print("Progress %d"% xi)
                     token_ids = data_utils.sentence_to_token_ids(tf.compat.as_bytes(sentence), vocab)
                     # print("token_id: ", token_ids)
                     bucket_id = len(gen_config.buckets) - 1
@@ -215,8 +227,8 @@ def test_decoder(gen_config, disc_config):
                         if bucket[0] >= len(token_ids):
                             bucket_id = i
                             break
-                    else:
-                        print("Sentence truncated: %s"% sentence)
+                    # else:
+                        # print("Sentence truncated: %s"% sentence)
 
                     encoder_inputs, decoder_inputs, target_weights, _, _ = model.get_batch({bucket_id: [(token_ids, [1])]},
                                                                  bucket_id, model.batch_size, type=0)
@@ -244,7 +256,7 @@ def test_decoder(gen_config, disc_config):
 
                 # Dump the generated outputs to the file ({split}.gen)
                 out_path = os.path.join(disc_config.train_dir, split)
-                with open(out_path + '.gen', 'w') as f:
+                with open(out_path + output_file_extension, 'w') as f:
                     for output in outputs_list:
                         f.write(output + '\n')
 
