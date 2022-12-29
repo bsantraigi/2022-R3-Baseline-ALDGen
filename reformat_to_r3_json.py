@@ -56,7 +56,7 @@ for s,t,p in zip(src, tgt, pred):
     collector_json.append({
         'con': s,
         'gt': t,
-        'adalabel': p
+        'aldgen': p
     })
     
 with open(args.json_path, 'w') as f:
